@@ -4,12 +4,6 @@
 ```bash
 dmesg -w
 ...
-[244376.576542] usb 1-4: new full-speed USB device number 15 using xhci_hcd
-[244376.726295] usb 1-4: New USB device found, idVendor=07cf, idProduct=6803, bcdDevice= 1.00
-[244376.726300] usb 1-4: New USB device strings: Mfr=1, Product=2, SerialNumber=0
-[244376.726303] usb 1-4: Product: CASIO USB-MIDI
-[244376.726306] usb 1-4: Manufacturer: CASIO
-[245672.936259] usb 1-4: USB disconnect, device number 15
 [246153.808532] usb 1-4: new full-speed USB device number 16 using xhci_hcd
 [246153.961692] usb 1-4: New USB device found, idVendor=07cf, idProduct=6803, bcdDevice= 1.00
 [246153.961695] usb 1-4: New USB device strings: Mfr=1, Product=2, SerialNumber=0
@@ -20,9 +14,8 @@ dmesg -w
 
 # after USB connection, is expected to be created a path em  `/sys/devices/...`
 ```bash
-$ grep -rli casio /sys/ 2>/dev/null
-/sys/devices/pci0000:00/0000:00:14.0/usb1/1-4/manufacturer
-/sys/devices/pci0000:00/0000:00:14.0/usb1/1-4/product
+find /sys/devices -name product | xargs grep CASIO
+/sys/devices/pci0000:00/0000:00:14.0/usb1/1-3/product:CASIO USB-MIDI
 ```
 
 # Debug USB
@@ -58,6 +51,13 @@ or
 $ pmidi --port 20:0 src/casio-lk-250/musicope/static/songs/Ramin_Djawadi_-_Westworld_Theme.mid
 ```
 
+# MIDI Keyboard Setup for CASIO LK-250
+- Press FUNCTION buttom
+- Press `>` button bellow LED screen until
+   - Settings MIDIInNavigate - Turn Listen
+   - Settings MIDIInNab R Ch == 1
+   - Settings MIDIInNab L Ch == 1
+
 
 # References
 https://github.com/igor-liferenko/pcm/blob/master/playpcm.w
@@ -65,10 +65,7 @@ https://unix.stackexchange.com/questions/13732/generating-random-noise-for-fun-i
 https://stackoverflow.com/questions/6672743/prevent-strace-from-abbreviating-arguments
 https://www-uxsup.csx.cam.ac.uk/pub/doc/suse/suse9.0/userguide-9.0/ch18s09.html
 https://support.casio.com/storage/en/manual/pdf/EN/008/LKS250_usersguide_B_EN.pdf
-   - last page "MIDI Implementation Chart"
-   - Settings MIDIInNavigate - Turn on
-   - Settings MIDIInNab R Ch == 1
-   - Settings MIDIInNab L Ch == 1
+- Instruction from official manual in last page "MIDI Implementation Chart"
 
 
 https://github.com/oldrich-s/musicope
