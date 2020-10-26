@@ -13,16 +13,27 @@
 #include <arpa/inet.h>
 #include <string.h>
 
+#include "src/sha1.c"
+
 int LISTEN_PORT = 8080;
 
+#define HTTP_DATA_BUFFER_LEN 1024
+#define HTTP_HEADER_METHOD 		0
+#define HTTP_HEADER_PATH		1
+#define HTTP_HEADEE_PROTOCOL		2
+#define HTTP_HEADER_CONNECTION 		3
+#define HTTP_HEADER_UPGRADE 		4
+#define HTTP_HEADER_SEC_WEBSOCKET_KEY 	5
+#define HTTP_SUPPORTED_HEADERS_COUNT 	6
+#define HTTP_HEADER_BUFFER_LEN 		256
 struct request {
 	int sockfd;
 	ssize_t data_size;
-	char data[1024];
+	char data[HTTP_DATA_BUFFER_LEN];
 	char http_method[6];
 	char http_resource_path[256];
 	char http_protocol[10];
-	char http_header_upgrade[10];
+	char http_headers[HTTP_SUPPORTED_HEADERS_COUNT][HTTP_HEADER_BUFFER_LEN];
 };
 
 struct response {
@@ -114,25 +125,111 @@ int allowed_static_path(char * resource_path){
 	allow |= ( strcmp(resource_path, "/script.js" ) == 0 );
 	return allow;
 }
-/*
-struct response upgrade_ws(req, resp)
+
+struct response upgrade_ws(struct request req, struct response resp)
 {
+	char line[1024];
+	sprintf(resp.code, "101");
+	sprintf(resp.status_text, "Switching Protocols");
+	sprintf(line, "%s %s %s\nSec-WebSocket-Key: %s\nSec-WebSocket-Accept: %s\n\n",
+			resp.proto,
+			resp.code,
+			resp.status_text,
+			req.http_headers[HTTP_HEADER_SEC_WEBSOCKET_KEY],
+			resp.http_headers[HTTP_RESP_HEADER_SEC_WEBSOCKET_ACCEPT]);
+	printf("WS HANDSHAKE: [%s]", line);
+	send(req.sockfd, line, strlen(line), 0);
+	while (( req.data_size = recv(req.sockfd, req.data, sizeof(req.data), 0)) < 0)
+	{
+		if ( (req.sockfd < 0) && (errno != EINTR))
+		{
+			printf("Receive from websocket %d failed: %m\n", req.sockfd);
+			shutdown(req.sockfd, SHUT_RDWR);
+			close(req.sockfd);
+			continue;
+		}
+	}
+	printf("WEBSOCKET DATA %s", req.data);
+	return resp;
 }
 
 struct request parse_headers(struct request req){
+	if ( strncmp(req.data, "GET ", 4) == 0 ){
+		int i;
+		int l = sizeof(req.data);
+		char line[sizeof(req.data)];
+		char header_name[sizeof(req.data)];
+		char header_value[HTTP_HEADER_BUFFER_LEN];
+		int header_value_len = 0;
+		int line_len=0;
+		int cur_field = 0;
+		for ( i=0; i < l; i++ ){
+			if ( req.data[i] == 0 ) {
+				break;
+			}
+			if ( req.data[i] == 13 ) {
+				continue;
+			}
+			line[line_len++] = req.data[i];
+			if ( req.data[i] == 10 ) {
+				if ( line_len == 1 ){
+					// two consectives '\n'. End of headers
+					break;
+				}
+				printf("Header [%s]=[%s]\n", header_name, header_value);
 
-		char * header_upgrade = check_headers_for("Upgrade");
-		char * header_connection = check_headers_for("Connection");
+				if ( strcmp( header_name, "Connection") == 0 ) {
+					sprintf(req.http_headers[HTTP_HEADER_CONNECTION], "%s", header_value);
+				}
+				if ( strcmp( header_name, "Upgrade") == 0 ) {
+					sprintf(req.http_headers[HTTP_HEADER_UPGRADE], "%s", header_value);
+				}
+				if ( strcmp( header_name, "Sec-WebSocket-Key" ) == 0 ) {
+					sprintf(req.http_headers[HTTP_HEADER_SEC_WEBSOCKET_KEY], "%s", header_value);
+				}
+				header_name[0]=0;
+				header_value_len=0;
+				header_value[0]=0;
+				line_len=0;
+				line[0]=0;
+				cur_field = 0;
+				continue;
+			}
+			if ( cur_field == 0 && req.data[i] == ':' ) {
+				strncpy( header_name, line, line_len-1 );
+				header_name[line_len-1]=0;
+				cur_field=1;
+				i++; i++; // jump the 2 bytes: ': ';
+			}
+			if ( cur_field == 1 ) {
+				header_value[header_value_len++]=req.data[i];
+				header_value[header_value_len]=0;
+			}
+		}
+		// req = parse_headers(req);
+		// int is_to_upgrade_ws = strcmp(req.header_upgrade, "websocket") == 0;
+	}
+
 	return req;
 }
-*/
+
+int upgrade_ws_requested(struct request req)
+{
+	int connection_upgrade = strcmp( req.http_headers[HTTP_HEADER_CONNECTION], "keep-alive, Upgrade" ) == 0;
+	int upgrade_websocket = strcmp( req.http_headers[HTTP_HEADER_UPGRADE], "websocket" ) == 0;
+	return connection_upgrade && upgrade_websocket;
+}
+
 struct response process_request(struct request req)
 {
 	struct response resp;
 	resp.keep_alive = 0;
 	printf("data received: %m\n%s\n", req.data);
 
-	sscanf(req.data, "%s %s %s\n", req.http_method, req.http_resource_path, req.http_protocol);
+	sscanf(req.data, "%s %s %s\n"
+			, req.http_method
+			, req.http_resource_path
+			, req.http_protocol);
 	// int scanpos = strlen(req.http_method)+strlen(req.http_resource_path)+strlen(req.http_protocol)+3;
 	sprintf(resp.proto, "HTTP/1.1");
 	sprintf(resp.code, "404");
@@ -140,12 +237,12 @@ struct response process_request(struct request req)
 	sprintf(resp.content_type, "content-type: text/plain; charset=utf-8");
 	// detect http request method
 	if ( strcmp(req.http_method, "GET") == 0 ){
-		// req = parse_headers(req);
+		req = parse_headers(req);
 		printf("looking for [%s]...\n",req.http_resource_path);
-		// int is_to_upgrade_ws = strcmp(req.header_upgrade, "websocket") == 0;
-		// if ( is_to_upgrade_ws ) {
-		// 	return upgrade_ws(req, resp);
-		//}
+		if ( upgrade_ws_requested(req) ) {
+			printf("upgrading to websocket connection...\n");
+		 	return upgrade_ws(req, resp);
+		}
 		if ( allowed_static_path(req.http_resource_path) ) {
 			return read_file_to_stream(req, resp);
 		}
@@ -294,6 +391,7 @@ int start_server()
 					else
 					{
 						struct request req;
+
 						req.sockfd = cur_fd;
 						// receive data
 						while (( req.data_size = recv(cur_fd, req.data, sizeof(req.data), 0)) < 0)

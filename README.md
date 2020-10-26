@@ -21,6 +21,7 @@ find /sys/devices -name product | xargs grep CASIO
 # Debug USB
 https://wiki.kubuntu.org/Kernel/Debugging/USB
 
+# to play a midi use timidity
 # to read MIDI Keyboard input connect USB and try
 ```bash
 $ aplaymidi -l
@@ -64,8 +65,15 @@ https://github.com/igor-liferenko/pcm/blob/master/playpcm.w
 https://unix.stackexchange.com/questions/13732/generating-random-noise-for-fun-in-dev-snd
 https://stackoverflow.com/questions/6672743/prevent-strace-from-abbreviating-arguments
 https://www-uxsup.csx.cam.ac.uk/pub/doc/suse/suse9.0/userguide-9.0/ch18s09.html
+https://www.midi.org/specifications-old/item/table-1-summary-of-midi-message
 https://support.casio.com/storage/en/manual/pdf/EN/008/LKS250_usersguide_B_EN.pdf
 - Instruction from official manual in last page "MIDI Implementation Chart"
+https://sfxpt.wordpress.com/2015/02/02/how-to-play-midi-files-under-ubuntu-linux/
+https://learn.sparkfun.com/tutorials/midi-tutorial/all
+http://people.bu.edu/bkulis/projects/music/index.html?ref=hackernoon.com
+https://www.recordingblogs.com/wiki/midi-note-on-message
+https://www.recordingblogs.com/wiki/midi-tick
+https://www.recordingblogs.com/wiki/header-chunk-of-a-midi-file
 
 
 https://github.com/oldrich-s/musicope
@@ -87,3 +95,7 @@ https://www.fourmilab.ch/webtools/midicsv/
 
 # epoll sample
 https://epollwait.blogspot.com/2010/11/linux-sockets-example.html
+
+# Download midi-files
+http://www.piano-midi.de/midi_files.htm
+https://hiphopmakers.com/best-free-midi-files-midi-songs

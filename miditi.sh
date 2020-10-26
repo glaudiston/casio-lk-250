@@ -3,9 +3,28 @@
 # This script is for PoC
 # The final code should be in C
 
-TMP_DIR=.note-pipe
-[ -e /dev/shm ] && TMP_DIR=/dev/shm/casio-lk-250/.note-pipe
-trap "rm -fr ${TMP_DIR}" err exit
+# Dependences
+# - bash
+# - coreutils (find,grep,cat,tr,cut,mkfifo,rm,mv)
+# - sed
+# - alsatools (aplaymidi,aseqdump) for send data to keyboard
+# - xargs
+# - websocketd (www.websocketd.com) for the web interface
+
+TMP_DIR=tmp
+[ -e /dev/shm ] && TMP_DIR=/dev/shm/casio-lk-250
+
+# on exit, remove temp folder and kill any subproccess like cat in status pipe_wait, etc.
+cleanup(){
+	j=$(jobs -p)
+	[ -n "$j" ] && {
+		echo "Killing pending jobs $j";
+		xargs kill <<<${j};
+	}
+	rm -fr ${TMP_DIR};
+	echo "CleanUp done."
+}
+trap cleanup ERR EXIT
 
 MIDI_FILE="$1"
 if [ "$MIDI_FILE" == "" ]; then
@@ -15,9 +34,8 @@ echo Opening MIDI [$MIDI_FILE]
 echo "Connect USB between your casion and the note"
 echo "Configure you casio keyboard:"
 echo "- Press \`>\` button bellow LED screen until"
-echo "   - Settings MIDIInNavigate - Turn Off"
-echo "      - Listen play midi input"
-echo "      - Off - Only leds"
+echo "   - Settings MIDIInNavigate: Both Hand Off"
+echo "      - MIDIInNavigate: Listen - play midi input"
 echo "   - Settings MIDIInNab R Ch == 1"
 echo "   - Settings MIDIInNab L Ch == 1"
 echo
@@ -146,7 +164,7 @@ function pmidi_control() {
 				WAIT_LIST=()
 				for ENTRY in ${ACTIVE_NOTES[@]}; do
 					read -d= N <<< $ENTRY
-					cat $(get_note_pipe $N) &
+					cat $(get_note_pipe $N) > /dev/null &
 					WAIT_LIST=(${WAIT_LIST[@]} $!)
 				done
 				echo "WAITING PIDS ${WAIT_LIST[@]}" >> $DEBUG
@@ -185,6 +203,7 @@ function wait_user_note_action()
 	ACTION="$1"
 	NOTE="$2"
 	VELOCITY="$3"
+	# echo "${ACTION} $NOTE $VELOCITY" > $TMP_DIR/ws &
 	pmidi_control "TIP_ON" "$ACTION" "$NOTE" "$VELOCITY";
 };
 
@@ -211,7 +230,10 @@ do
 	fi;
 done &
 
-ref/midicsv-1.1/midicsv "$MIDI_FILE" | while read MIDI_RECORD;
+# mkfifo $TMP_DIR/ws
+# websocketd --port 8888 --staticdir static ./ws.sh &>> $DEBUG &
+
+while read MIDI_RECORD;
 do
 	F1=$(echo "$MIDI_RECORD" | cut -d, -f1)
 	F2=$(echo "$MIDI_RECORD" | cut -d, -f2)
@@ -234,6 +256,7 @@ do
 	fi;
 	echo MIDI FILE: $TITLE - $INSTRUMENT - [$MIDI_RECORD] - [$TIME][$ACTION][$TYPE][$F3] >> $DEBUG
 	if [[ "$ACTION" =~ End_of_file ]]; then
+		echo "$ACTION"
 		exit 0;
 	fi;
 	if [ "$ACTION" == "Note_on_c" ];then
@@ -250,7 +273,8 @@ do
 	#if [ "$F1" == "2" -a "$ACTION" == "End_track" ]; then
 	#	exit 0;
 	#fi;
-done
+done < <(ref/midicsv-1.1/midicsv "$MIDI_FILE")
 pmidi_control "STOP";
+cleanup
 
 wait
